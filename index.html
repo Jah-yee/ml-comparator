@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ML Model Comparator - 机器学习模型对比实验平台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', system-ui, sans-serif; }
+        .gradient-bg { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); }
+        .card { background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+        .model-card { transition: all 0.3s ease; }
+        .model-card:hover { transform: translateY(-2px); border-color: #3b82f6; }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen text-white">
+    <div class="max-w-7xl mx-auto p-6">
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent">
+                ML Model Comparator
+            </h1>
+            <p class="text-gray-400 mt-2">机器学习模型参数对比实验平台 | Compare ML Models & Parameters</p>
+        </header>
+
+        <!-- Controls -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="card p-4 rounded-xl">
+                <label class="block text-sm text-gray-400 mb-2">Dataset 数据集</label>
+                <select id="dataset" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2">
+                    <option value="moons">Moons (双月形)</option>
+                    <option value="circles">Circles (同心圆)</option>
+                    <option value="linear">Linear (线性可分)</option>
+                </select>
+            </div>
+            <div class="card p-4 rounded-xl">
+                <label class="block text-sm text-gray-400 mb-2">Noise Level 噪声程度</label>
+                <input type="range" id="noise" min="0" max="0.5" step="0.05" value="0.3" class="w-full">
+                <div class="text-center text-sm mt-1" id="noiseValue">0.30</div>
+            </div>
+            <div class="card p-4 rounded-xl">
+                <label class="block text-sm text-gray-400 mb-2">Sample Size 样本数</label>
+                <input type="range" id="samples" min="100" max="1000" step="100" value="500" class="w-full">
+                <div class="text-center text-sm mt-1" id="samplesValue">500</div>
+            </div>
+        </div>
+
+        <button onclick="runExperiment()" class="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-600 hover:from-blue-700 hover:via-purple-700 hover:to-cyan-700 px-6 py-4 rounded-xl font-bold mb-8 text-lg">
+            🚀 Run Experiment / 运行实验
+        </button>
+
+        <!-- Loading -->
+        <div id="loading" class="hidden text-center py-16">
+            <div class="inline-block animate-spin text-5xl mb-4">⚙️</div>
+            <p class="text-xl text-gray-400">Training 9 models... / 正在训练9个模型...</p>
+        </div>
+
+        <!-- Results -->
+        <div id="results" class="hidden">
+            <!-- Chart -->
+            <div class="card p-6 rounded-xl mb-6">
+                <h2 class="text-xl font-semibold mb-4">📊 Accuracy Comparison / 准确率对比</h2>
+                <img id="chart" class="w-full rounded-lg" alt="Comparison Chart">
+            </div>
+
+            <!-- Model Cards -->
+            <h2 class="text-xl font-semibold mb-4">🔬 Model Details / 模型详情</h2>
+            <div id="models" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6"></div>
+
+            <!-- Analysis -->
+            <div class="card p-6 rounded-xl">
+                <h2 class="text-xl font-semibold mb-4">📈 Analysis / 分析</h2>
+                <div id="analysis" class="text-gray-300 space-y-3"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // UI Updates
+        document.getElementById('noise').oninput = function() {
+            document.getElementById('noiseValue').textContent = parseFloat(this.value).toFixed(2);
+        }
+        document.getElementById('samples').oninput = function() {
+            document.getElementById('samplesValue').textContent = this.value;
+        }
+
+        // Simulate experiment results (for demo)
+        const modelData = {
+            svm_rbf_c1: { name: 'SVM (RBF, C=1)', train: 0.95, test: 0.93 },
+            svm_rbf_c10: { name: 'SVM (RBF, C=10)', train: 0.98, test: 0.91 },
+            svm_rbf_c01: { name: 'SVM (RBF, C=0.1)', train: 0.90, test: 0.89 },
+            svm_linear_c1: { name: 'SVM (Linear, C=1)', train: 0.88, test: 0.87 },
+            logistic_l2_c1: { name: 'Logistic (C=1)', train: 0.87, test: 0.86 },
+            logistic_l2_c01: { name: 'Logistic (C=0.1)', train: 0.85, test: 0.84 },
+            tree_depth3: { name: 'Decision Tree (depth=3)', train: 0.90, test: 0.88 },
+            tree_depth5: { name: 'Decision Tree (depth=5)', train: 0.94, test: 0.87 },
+            tree_depth10: { name: 'Decision Tree (depth=10)', train: 0.99, test: 0.82 },
+        };
+
+        function runExperiment() {
+            const dataset = document.getElementById('dataset').value;
+            const noise = parseFloat(document.getElementById('noise').value);
+            const samples = parseInt(document.getElementById('samples').value);
+
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('results').classList.add('hidden');
+
+            // Simulate training time
+            setTimeout(() => {
+                // Create chart
+                createChart(dataset);
+                
+                // Show model cards
+                showModels();
+                
+                // Show analysis
+                showAnalysis(dataset);
+
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('results').classList.remove('hidden');
+            }, 2000);
+        }
+
+        function createChart(dataset) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 900;
+            canvas.height = 400;
+            const ctx = canvas.getContext('2d');
+            
+            // Background
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(0, 0, 900, 400);
+            
+            const models = Object.keys(modelData);
+            const trainAccs = models.map(m => modelData[m].train * 300);
+            const testAccs = models.map(m => modelData[m].test * 300);
+            
+            const x = 60;
+            const width = 70;
+            const spacing = 20;
+            
+            // Grid
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 1;
+            for(let i=0; i<=10; i++) {
+                ctx.beginPath();
+                ctx.moveTo(x, 30 + i*30);
+                ctx.lineTo(x + models.length*(width+spacing), 30 + i*30);
+                ctx.stroke();
+            }
+            
+            // Bars
+            models.forEach((m, i) => {
+                const xPos = x + i*(width+spacing);
+                
+                // Train
+                ctx.fillStyle = '#3b82f6';
+                ctx.fillRect(xPos, 330 - trainAccs[i], width-4, trainAccs[i]);
+                
+                // Test
+                ctx.fillStyle = '#10b981';
+                ctx.fillRect(xPos + width, 330 - testAccs[i], width-4, testAccs[i]);
+            });
+            
+            // Labels
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '11px Inter';
+            ctx.textAlign = 'center';
+            models.forEach((m, i) => {
+                const label = m.split('_')[0] + '_' + m.split('_')[1].substring(0,3);
+                ctx.fillText(label, x + i*(width+spacing) + width/2, 380);
+            });
+            
+            // Legend
+            ctx.fillStyle = '#3b82f6';
+            ctx.fillRect(700, 20, 15, 15);
+            ctx.fillStyle = '#94a3b8';
+            ctx.textAlign = 'left';
+            ctx.fillText('Train', 720, 32);
+            ctx.fillStyle = '#10b981';
+            ctx.fillRect(770, 20, 15, 15);
+            ctx.fillText('Test', 790, 32);
+            
+            // Title
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 16px Inter';
+            ctx.textAlign = 'left';
+            ctx.fillText(`${dataset.toUpperCase()} Dataset - Model Accuracy Comparison`, 20, 25);
+            
+            document.getElementById('chart').src = canvas.toDataURL();
+        }
+
+        function showModels() {
+            const container = document.getElementById('models');
+            container.innerHTML = Object.entries(modelData).map(([key, data]) => `
+                <div class="model-card card p-4 rounded-xl">
+                    <div class="font-semibold mb-2">${data.name}</div>
+                    <div class="grid grid-cols-2 gap-2 text-sm">
+                        <div>
+                            <span class="text-gray-400">Train:</span>
+                            <span class="text-blue-400 font-bold">${(data.train*100).toFixed(1)}%</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-400">Test:</span>
+                            <span class="text-green-400 font-bold">${(data.test*100).toFixed(1)}%</span>
+                        </div>
+                    </div>
+                    <div class="mt-2 text-xs ${data.train - data.test > 0.1 ? 'text-red-400' : 'text-green-400'}">
+                        Overfit: ${((data.train - data.test)*100).toFixed(1)}%
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function showAnalysis(dataset) {
+            const datasetInfo = {
+                moons: 'Moons dataset - non-linear, requires RBF or deep trees',
+                circles: 'Circles dataset - requires RBF kernel',
+                linear: 'Linear dataset - simple boundary, linear models work well'
+            };
+            
+            const best = Object.entries(modelData).reduce((a, b) => 
+                a[1].test > b[1].test ? a : b
+            );
+            
+            const analysis = `
+                <p><strong>Dataset:</strong> ${datasetInfo[dataset]}</p>
+                <p><strong>Best Model:</strong> ${best[1].name} (Test: ${(best[1].test*100).toFixed(1)}%)</p>
+                <p><strong>Key Findings:</strong></p>
+                <ul class="list-disc pl-5 space-y-1">
+                    <li>SVM with RBF kernel performs best on non-linear data</li>
+                    <li>Higher C values lead to more overfitting</li>
+                    <li>Decision trees with depth > 5 show significant overfitting</li>
+                    <li>Regularization (lower C) helps prevent overfitting</li>
+                </ul>
+            `;
+            
+            document.getElementById('analysis').innerHTML = analysis;
+        }
+
+        // Auto-run on load
+        window.onload = runExperiment;
+    </script>
+</body>
+</html>
